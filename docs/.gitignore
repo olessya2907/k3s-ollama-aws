@@ -1,0 +1,13 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+
+# SSH private keys
+*.pem
+*.key
+
+# macOS
+.DS_Store

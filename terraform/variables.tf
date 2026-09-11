@@ -32,3 +32,14 @@ variable "availability_zone" {
   type        = string
   default     = "us-east-1a"
 }
+
+variable "my_ip" {
+  description = "Your public IP in CIDR form (x.x.x.x/32) — allowed to reach SSH, K3S API and web"
+  type        = string
+}
+
+variable "public_key_path" {
+  description = "Path to the SSH public key that will be installed on the servers"
+  type        = string
+  default     = "~/.ssh/k3s-ollama.pub"
+}

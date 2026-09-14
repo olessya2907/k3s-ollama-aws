@@ -1,0 +1,15 @@
+---
+- name: Install K3S server (control plane)
+  ansible.builtin.shell: "curl -sfL https://get.k3s.io | sh -s - server --tls-san {{ ansible_host }} --write-kubeconfig-mode 644"
+  args:
+    creates: /etc/rancher/k3s/k3s.yaml
+
+- name: Read the node token
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_node_token
+
+- name: Save token and master private IP for workers
+  ansible.builtin.set_fact:
+    k3s_token: "{{ k3s_node_token.content | b64decode | trim }}"
+    master_private_ip: "{{ ansible_default_ipv4.address }}"

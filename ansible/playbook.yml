@@ -1,0 +1,12 @@
+---
+- name: Install K3S server on master
+  hosts: master
+  become: true
+  roles:
+    - k3s_master
+
+- name: Install K3S agent on workers
+  hosts: workers
+  become: true
+  roles:
+    - k3s_worker

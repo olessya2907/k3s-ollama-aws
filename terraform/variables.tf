@@ -43,3 +43,21 @@ variable "public_key_path" {
   type        = string
   default     = "~/.ssh/k3s-ollama.pub"
 }
+
+variable "master_instance_type" {
+  description = "EC2 instance type for the K3S master"
+  type        = string
+  default     = "t3.small"
+}
+
+variable "worker_instance_type" {
+  description = "EC2 instance type for the K3S workers"
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "worker_count" {
+  description = "How many worker nodes to create"
+  type        = number
+  default     = 3
+}

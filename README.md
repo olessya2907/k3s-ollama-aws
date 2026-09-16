@@ -74,38 +74,57 @@ k3s-ollama-aws/
 ## Prerequisites
 
 - An AWS account with credentials configured (`aws configure`)
-- [Terraform](https://developer.hashicorp.com/terraform/downloads), [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/index.html), [kubectl](https://kubernetes.io/docs/tasks/tools/), [Docker](https://docs.docker.com/get-docker/)
-- An SSH key pair at `~/.ssh/k3s-ollama`
+- [Terraform](https://developer.hashicorp.com/terraform/downloads), [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/index.html), [kubectl](https://kubernetes.io/docs/tasks/tools/), and [Docker](https://docs.docker.com/get-docker/) — **Docker Desktop must be running** for step 7
+- An SSH key pair at `~/.ssh/k3s-ollama` (step 0 creates it)
+
+> Run all deployment commands in the **same terminal window**: several steps rely on the `MASTER_IP` variable and the `KUBECONFIG` setting, which only live in the current shell. Full build time is roughly **8–12 minutes**.
 
 ## Deployment
 
-**0. Create an SSH key** (once):
+### 0. Create an SSH key (once)
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/k3s-ollama -C "k3s-ollama"
 ```
 
-**1. Provision the infrastructure with Terraform:**
+### 1. Provision the infrastructure with Terraform (~3 min)
+
+The Security Group only allows your own IP, so set your **current** public IP first. Find it with:
+
+```bash
+curl https://checkip.amazonaws.com
+```
+
+Create (or edit) `terraform/terraform.tfvars` with that IP:
+
+```hcl
+my_ip = "YOUR_PUBLIC_IP/32"
+```
+
+Then apply:
 
 ```bash
 cd terraform
-# create terraform.tfvars with your public IP, e.g.:  my_ip = "203.0.113.45/32"
-terraform init
-terraform apply
+terraform init      # first time only
+terraform apply     # review the plan, type: yes
 ```
 
-Terraform creates the network and servers **and automatically generates `ansible/inventory.ini`** with the real IPs — no manual editing needed.
+Terraform builds the network and four servers, and **automatically generates `ansible/inventory.ini`** with the real IPs. Wait for `Apply complete!`.
 
-**2. Configure the cluster with Ansible:**
+> If you run this from a different network than before, your public IP has changed — always refresh `my_ip` here, or the servers will refuse the connection.
+
+### 2. Install K3S with Ansible (~2 min)
+
+Give the servers about a minute to finish booting, then:
 
 ```bash
 cd ../ansible
 ansible-playbook playbook.yml
 ```
 
-Installs the K3S server on the master, then installs the agent on each worker and joins them to the cluster.
+In the `PLAY RECAP`, all four hosts should show `unreachable=0` and `failed=0`. If a worker shows `unreachable` (still booting), just run the command again — it is safe to repeat.
 
-**3. Get cluster access on your machine:**
+### 3. Connect kubectl (~1 min)
 
 ```bash
 cd ../terraform
@@ -114,29 +133,39 @@ mkdir -p ~/.kube
 scp -i ~/.ssh/k3s-ollama -o StrictHostKeyChecking=no ubuntu@$MASTER_IP:/etc/rancher/k3s/k3s.yaml ~/.kube/k3s-ollama.yaml
 sed -i '' "s/127.0.0.1/$MASTER_IP/" ~/.kube/k3s-ollama.yaml
 export KUBECONFIG=~/.kube/k3s-ollama.yaml
-kubectl get nodes          # master + 3 workers should be Ready
+kubectl get nodes
 ```
 
-**4. Deploy Ollama and the Ingress:**
+All four nodes should become `Ready` (workers may need an extra minute — re-run `kubectl get nodes`). If the first `kubectl` call is slow to respond, wait a few seconds and retry.
+
+> `sed -i ''` is the macOS form. On Linux use `sed -i "s/127.0.0.1/$MASTER_IP/" ~/.kube/k3s-ollama.yaml` (no empty quotes).
+
+### 4. Deploy Ollama and the Ingress (~2 min)
 
 ```bash
 kubectl apply -f ../k3s/
-kubectl get pods           # wait for the ollama pod to be Running 1/1
+kubectl get pods
 ```
 
-**5. Pull the model into Ollama:**
+Wait until the `ollama` pod is `Running` and `1/1` (it pulls the image first).
+
+### 5. Pull the model into Ollama (~1 min)
 
 ```bash
 kubectl exec deploy/ollama -- ollama pull llama3.2:1b
 ```
 
-**6. (optional) Verify the path from outside:**
+Wait for `success`.
+
+### 6. Verify the path from outside (optional)
 
 ```bash
 curl http://$MASTER_IP/api/tags   # should list llama3.2:1b
 ```
 
-**7. Start OpenWebUI locally:**
+### 7. Start OpenWebUI locally
+
+Make sure Docker Desktop is running, then:
 
 ```bash
 docker run -d \
@@ -147,11 +176,13 @@ docker run -d \
   ghcr.io/open-webui/open-webui:main
 ```
 
-Open `http://localhost:3000`, create the first account, select the `llama3.2:1b` model, and start chatting.
+Wait about 30 seconds, then open `http://localhost:3000`. Create the first account (any email and password — the first user becomes admin), select the `llama3.2:1b` model, and start chatting.
 
-## Teardown — important to avoid ongoing charges
+> If Docker says the name is already in use, remove the old container first: `docker rm -f open-webui`, then run the command again.
 
-The NAT Gateway and running EC2 instances cost money for as long as they exist, so **always destroy the stack when you are done**:
+## Teardown — always run when done (avoids ongoing charges)
+
+The NAT Gateway and running EC2 instances cost money for as long as they exist, so destroy the stack as soon as you are finished:
 
 ```bash
 cd terraform
@@ -160,6 +191,14 @@ docker rm -f open-webui
 ```
 
 Tip: set an **AWS Budgets** alert (e.g. notify above $5) so you are told immediately if something is left running.
+
+## Troubleshooting
+
+- **Ansible: a worker is `UNREACHABLE`** — the servers are still booting. Wait a minute and re-run `ansible-playbook playbook.yml` (it is idempotent).
+- **SSH or kubectl times out reaching the master** — your public IP changed. Update `my_ip` in `terraform.tfvars`, run `terraform apply` again to refresh the Security Group, then retry.
+- **Ollama pod stuck in `Evicted` / `DiskPressure`** — the node ran out of disk. The config uses a 30 GB root volume, so re-create the servers with a fresh `terraform apply`.
+- **`docker run` says the name is already in use** — run `docker rm -f open-webui`, then start it again.
+- **OpenWebUI does not show the model** — confirm `curl http://$MASTER_IP/api/tags` lists `llama3.2:1b`, then refresh the page.
 
 ## Key implementation details
 

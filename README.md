@@ -35,7 +35,7 @@ flowchart TB
 
 ## Tech stack
 
-- **AWS** — VPC, subnets, Internet Gateway, NAT Gateway, Security Group, EC2 (Graviton / arm64)
+- **AWS** — VPC, subnets, Internet Gateway, NAT Gateway, Security Group, EC2 (t3, x86 / amd64)
 - **Terraform** — all infrastructure as code
 - **Ansible** — installs K3S (server on the master, agents on the workers)
 - **K3S** — lightweight Kubernetes distribution
@@ -62,7 +62,7 @@ k3s-ollama-aws/
 │   └── roles/
 │       ├── k3s_master/tasks/main.yml
 │       └── k3s_worker/tasks/main.yml
-├── k8s/              # Kubernetes manifests
+├── k3s/              # Kubernetes manifests
 │   ├── ollama-deployment.yaml
 │   ├── ollama-service.yaml
 │   └── ingress.yaml
@@ -119,7 +119,7 @@ kubectl get nodes        # should show the master + 3 workers as Ready
 **5. Deploy Ollama and the Ingress:**
 
 ```bash
-kubectl apply -f ../k8s/
+kubectl apply -f ../k3s/
 ```
 
 **6. Pull a small model into Ollama:**
@@ -154,6 +154,5 @@ docker rm -f open-webui
 
 ## Notes
 
-- The cluster runs on AWS Graviton (arm64) instances for lower cost.
 - The NAT Gateway and running EC2 instances are the main cost while the stack is up; always `terraform destroy` when done.
 - The Security Group only allows SSH, the Kubernetes API, and web ports from the operator's own IP (`my_ip`).

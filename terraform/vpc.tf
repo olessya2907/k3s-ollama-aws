@@ -1,3 +1,4 @@
+# VPC - isolated virtual network for the whole project
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
@@ -8,6 +9,7 @@ resource "aws_vpc" "main" {
   }
 }
 
+# Public subnet - for the master (has internet access)
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidr
@@ -19,6 +21,7 @@ resource "aws_subnet" "public" {
   }
 }
 
+# Private subnet - for the workers (no direct inbound access)
 resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidr

@@ -3,6 +3,7 @@ resource "aws_security_group" "k3s_nodes" {
   description = "Security group for K3S master and worker nodes"
   vpc_id      = aws_vpc.main.id
 
+  # All traffic between nodes in the same security group (inside the cluster)
   ingress {
     description = "Full traffic between cluster nodes"
     from_port   = 0
@@ -11,6 +12,7 @@ resource "aws_security_group" "k3s_nodes" {
     self        = true
   }
 
+  # SSH from your machine
   ingress {
     description = "SSH from my IP"
     from_port   = 22
@@ -19,6 +21,7 @@ resource "aws_security_group" "k3s_nodes" {
     cidr_blocks = [var.my_ip]
   }
 
+  # Kubernetes API from your machine (for kubectl)
   ingress {
     description = "K3S API from my IP"
     from_port   = 6443
@@ -27,6 +30,7 @@ resource "aws_security_group" "k3s_nodes" {
     cidr_blocks = [var.my_ip]
   }
 
+  # HTTP to the ingress from your machine
   ingress {
     description = "HTTP from my IP"
     from_port   = 80
@@ -35,6 +39,7 @@ resource "aws_security_group" "k3s_nodes" {
     cidr_blocks = [var.my_ip]
   }
 
+  # HTTPS to the ingress from your machine
   ingress {
     description = "HTTPS from my IP"
     from_port   = 443
@@ -43,6 +48,7 @@ resource "aws_security_group" "k3s_nodes" {
     cidr_blocks = [var.my_ip]
   }
 
+  # All outbound traffic allowed
   egress {
     description = "Allow all outbound"
     from_port   = 0

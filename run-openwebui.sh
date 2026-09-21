@@ -1,5 +1,5 @@
 #!/bin/bash
-# Публичный IP master — подставь после terraform apply
+# Master public IP - fill in after terraform apply
 MASTER_IP="MASTER_PUBLIC_IP"
 
 docker run -d \

@@ -2,7 +2,7 @@
 
 A self-managed Kubernetes cluster (**K3S**) on AWS — infrastructure provisioned with **Terraform**, configured with **Ansible**, running an **Ollama** large language model exposed through a **Traefik Ingress**, with a local **OpenWebUI** chat interface talking to the model inside the cluster.
 
-The project demonstrates a full DevOps workflow end to end — infrastructure as code, configuration management, a multi-node Kubernetes cluster, and a real workload on top of it — reproducible from scratch with a handful of commands.
+The project demonstrates a full DevOps workflow end to end — infrastructure as code, configuration management, a multi-node Kubernetes cluster, and a real workload on top of it — reproducible from scratch with a single command.
 
 ## Architecture
 
@@ -47,6 +47,8 @@ flowchart TB
 
 ```
 k3s-ollama-aws/
+├── deploy.sh                   # one command: infra -> K3S -> Ollama -> OpenWebUI
+├── destroy.sh                  # one command: tear everything down + leftover check
 ├── terraform/                  # AWS infrastructure as code
 │   ├── provider.tf             # AWS + local providers
 │   ├── variables.tf
@@ -74,57 +76,54 @@ k3s-ollama-aws/
 ## Prerequisites
 
 - An AWS account with credentials configured (`aws configure`)
-- [Terraform](https://developer.hashicorp.com/terraform/downloads), [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/index.html), [kubectl](https://kubernetes.io/docs/tasks/tools/), and [Docker](https://docs.docker.com/get-docker/) — **Docker Desktop must be running** for step 7
-- An SSH key pair at `~/.ssh/k3s-ollama` (step 0 creates it)
-
-> Run all deployment commands in the **same terminal window**: several steps rely on the `MASTER_IP` variable and the `KUBECONFIG` setting, which only live in the current shell. Full build time is roughly **8–12 minutes**.
-
-## Deployment
-
-### 0. Create an SSH key (once)
+- [Terraform](https://developer.hashicorp.com/terraform/downloads), [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/index.html), [kubectl](https://kubernetes.io/docs/tasks/tools/), and [Docker](https://docs.docker.com/get-docker/) — **Docker Desktop must be running**
+- An SSH key pair at `~/.ssh/k3s-ollama` — create it once with:
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/k3s-ollama -C "k3s-ollama"
 ```
 
-### 1. Provision the infrastructure with Terraform (~3 min)
+## Quick start (one command)
 
-The Security Group only allows your own IP, so set your **current** public IP first. Find it with:
+With the prerequisites in place, bring the whole stack up:
 
 ```bash
-curl https://checkip.amazonaws.com
+./deploy.sh
 ```
 
-Create (or edit) `terraform/terraform.tfvars` with that IP:
+The script detects your current public IP, provisions the infrastructure, installs K3S, deploys Ollama, pulls the model, and starts OpenWebUI. When it finishes (~10 minutes), open `http://localhost:3000`, create an account, pick the `llama3.2:1b` model, and chat.
 
-```hcl
-my_ip = "YOUR_PUBLIC_IP/32"
+Tear everything down and confirm nothing is left running (and billing):
+
+```bash
+./destroy.sh
 ```
 
-Then apply:
+> `deploy.sh` creates real, billable AWS resources. Always run `./destroy.sh` when you are done.
+
+The manual, step-by-step process is below if you want to run it by hand.
+
+## Manual deployment (step by step)
+
+**1. Provision the infrastructure with Terraform:**
 
 ```bash
 cd terraform
-terraform init      # first time only
-terraform apply     # review the plan, type: yes
+# create terraform.tfvars with your public IP, e.g.:  my_ip = "203.0.113.45/32"
+terraform init
+terraform apply
 ```
 
-Terraform builds the network and four servers, and **automatically generates `ansible/inventory.ini`** with the real IPs. Wait for `Apply complete!`.
+Terraform creates the network and servers **and automatically generates `ansible/inventory.ini`** with the real IPs — no manual editing needed.
 
-> If you run this from a different network than before, your public IP has changed — always refresh `my_ip` here, or the servers will refuse the connection.
-
-### 2. Install K3S with Ansible (~2 min)
-
-Give the servers about a minute to finish booting, then:
+**2. Configure the cluster with Ansible:**
 
 ```bash
 cd ../ansible
 ansible-playbook playbook.yml
 ```
 
-In the `PLAY RECAP`, all four hosts should show `unreachable=0` and `failed=0`. If a worker shows `unreachable` (still booting), just run the command again — it is safe to repeat.
-
-### 3. Connect kubectl (~1 min)
+**3. Get cluster access on your machine:**
 
 ```bash
 cd ../terraform
@@ -133,39 +132,23 @@ mkdir -p ~/.kube
 scp -i ~/.ssh/k3s-ollama -o StrictHostKeyChecking=no ubuntu@$MASTER_IP:/etc/rancher/k3s/k3s.yaml ~/.kube/k3s-ollama.yaml
 sed -i '' "s/127.0.0.1/$MASTER_IP/" ~/.kube/k3s-ollama.yaml
 export KUBECONFIG=~/.kube/k3s-ollama.yaml
-kubectl get nodes
+kubectl get nodes          # master + 3 workers should be Ready
 ```
 
-All four nodes should become `Ready` (workers may need an extra minute — re-run `kubectl get nodes`). If the first `kubectl` call is slow to respond, wait a few seconds and retry.
-
-> `sed -i ''` is the macOS form. On Linux use `sed -i "s/127.0.0.1/$MASTER_IP/" ~/.kube/k3s-ollama.yaml` (no empty quotes).
-
-### 4. Deploy Ollama and the Ingress (~2 min)
+**4. Deploy Ollama and the Ingress:**
 
 ```bash
 kubectl apply -f ../k3s/
-kubectl get pods
+kubectl get pods           # wait for the ollama pod to be Running 1/1
 ```
 
-Wait until the `ollama` pod is `Running` and `1/1` (it pulls the image first).
-
-### 5. Pull the model into Ollama (~1 min)
+**5. Pull the model into Ollama:**
 
 ```bash
 kubectl exec deploy/ollama -- ollama pull llama3.2:1b
 ```
 
-Wait for `success`.
-
-### 6. Verify the path from outside (optional)
-
-```bash
-curl http://$MASTER_IP/api/tags   # should list llama3.2:1b
-```
-
-### 7. Start OpenWebUI locally
-
-Make sure Docker Desktop is running, then:
+**6. Start OpenWebUI locally:**
 
 ```bash
 docker run -d \
@@ -176,13 +159,11 @@ docker run -d \
   ghcr.io/open-webui/open-webui:main
 ```
 
-Wait about 30 seconds, then open `http://localhost:3000`. Create the first account (any email and password — the first user becomes admin), select the `llama3.2:1b` model, and start chatting.
-
-> If Docker says the name is already in use, remove the old container first: `docker rm -f open-webui`, then run the command again.
+Open `http://localhost:3000`, create the first account, select `llama3.2:1b`, and start chatting.
 
 ## Teardown — always run when done (avoids ongoing charges)
 
-The NAT Gateway and running EC2 instances cost money for as long as they exist, so destroy the stack as soon as you are finished:
+Easiest: `./destroy.sh`. Or manually:
 
 ```bash
 cd terraform
@@ -190,19 +171,26 @@ terraform destroy
 docker rm -f open-webui
 ```
 
-Tip: set an **AWS Budgets** alert (e.g. notify above $5) so you are told immediately if something is left running.
+Then confirm nothing expensive is left:
+
+```bash
+aws ec2 describe-nat-gateways --filter "Name=state,Values=available,pending" --query "NatGateways[].NatGatewayId" --output text
+aws ec2 describe-addresses --query "Addresses[].PublicIp" --output text
+```
+
+Both should be empty. Tip: set an **AWS Budgets** alert so you are notified of unexpected spend.
 
 ## Troubleshooting
 
-- **Ansible: a worker is `UNREACHABLE`** — the servers are still booting. Wait a minute and re-run `ansible-playbook playbook.yml` (it is idempotent).
-- **SSH or kubectl times out reaching the master** — your public IP changed. Update `my_ip` in `terraform.tfvars`, run `terraform apply` again to refresh the Security Group, then retry.
+- **Ansible: a worker is `UNREACHABLE`** — the servers are still booting. Wait a minute and re-run `ansible-playbook playbook.yml`.
+- **SSH or kubectl times out reaching the master** — your public IP changed. Update `my_ip` in `terraform.tfvars`, run `terraform apply` again, then retry. (`deploy.sh` handles this automatically.)
 - **Ollama pod stuck in `Evicted` / `DiskPressure`** — the node ran out of disk. The config uses a 30 GB root volume, so re-create the servers with a fresh `terraform apply`.
-- **`docker run` says the name is already in use** — run `docker rm -f open-webui`, then start it again.
-- **OpenWebUI does not show the model** — confirm `curl http://$MASTER_IP/api/tags` lists `llama3.2:1b`, then refresh the page.
+- **OpenWebUI shows "No models available"** — its saved Ollama address is stale. Open Settings → Admin Settings → Connections and set the Ollama API URL to `http://<MASTER_IP>`, then refresh. Confirm the backend works with `curl http://<MASTER_IP>/api/tags`. A clean restart also fixes it: `docker rm -f open-webui; docker volume rm open-webui`, then start it again.
 
 ## Key implementation details
 
-- **Terraform generates the Ansible inventory** (`local_file` + `templatefile`), so the real server IPs are filled in automatically on every `apply` — nothing is typed by hand.
+- **One-command deploy/destroy** (`deploy.sh` / `destroy.sh`), including automatic public-IP detection and a teardown check that confirms no billable resources are left.
+- **Terraform generates the Ansible inventory** (`local_file` + `templatefile`), so the real server IPs are filled in automatically on every `apply`.
 - **Private workers are reached through the master** using an SSH `ProxyCommand` (bastion pattern), since they have no public IP.
 - **Node disk is sized at creation** (`root_block_device`, 30 GB) so container images and the model fit; the filesystem is grown automatically on first boot.
 - **Security Group** only allows SSH, the Kubernetes API, and the web ports from the operator's own IP (`my_ip`), while cluster nodes trust each other internally.

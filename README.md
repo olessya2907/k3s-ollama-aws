@@ -1,8 +1,8 @@
 # K3S + Ollama on AWS
 
-A self-managed Kubernetes cluster (**K3S**) on AWS — infrastructure provisioned with **Terraform**, configured with **Ansible**, running an **Ollama** large language model exposed through a **Traefik Ingress**, with a local **OpenWebUI** chat interface talking to the model inside the cluster.
+A self-managed Kubernetes cluster (**K3S**) on AWS - infrastructure provisioned with **Terraform**, configured with **Ansible**, running an **Ollama** large language model exposed through a **Traefik Ingress**, with a local **OpenWebUI** chat interface talking to the model inside the cluster.
 
-The project demonstrates a full DevOps workflow end to end — infrastructure as code, configuration management, a multi-node Kubernetes cluster, and a real workload on top of it — reproducible from scratch with a single command.
+The project demonstrates a full DevOps workflow end to end - infrastructure as code, configuration management, a multi-node Kubernetes cluster, and a real workload on top of it - reproducible from scratch with a single command.
 
 ## Architecture
 
@@ -35,13 +35,13 @@ flowchart TB
 
 ## Tech stack
 
-- **AWS** — VPC, public/private subnets, Internet Gateway, NAT Gateway, Security Group, EC2 (t3.small master, t3.medium workers, x86 / amd64)
-- **Terraform** — all infrastructure as code; also generates the Ansible inventory automatically
-- **Ansible** — installs K3S (server on the master, agents on the workers), agentless over SSH
-- **K3S** — lightweight Kubernetes distribution
-- **Traefik** — Ingress controller (bundled with K3S)
-- **Ollama** — runs the LLM (`llama3.2:1b`) inside the cluster
-- **OpenWebUI** — chat interface, runs locally in Docker
+- **AWS** - VPC, public/private subnets, Internet Gateway, NAT Gateway, Security Group, EC2 (t3.small master, t3.medium workers, x86 / amd64)
+- **Terraform** - all infrastructure as code; also generates the Ansible inventory automatically
+- **Ansible** - installs K3S (server on the master, agents on the workers), agentless over SSH
+- **K3S** - lightweight Kubernetes distribution
+- **Traefik** - Ingress controller (bundled with K3S)
+- **Ollama** - runs the LLM (`llama3.2:1b`) inside the cluster
+- **OpenWebUI** - chat interface, runs locally in Docker
 
 ## Repository structure
 
@@ -76,8 +76,8 @@ k3s-ollama-aws/
 ## Prerequisites
 
 - An AWS account with credentials configured (`aws configure`)
-- [Terraform](https://developer.hashicorp.com/terraform/downloads), [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/index.html), [kubectl](https://kubernetes.io/docs/tasks/tools/), and [Docker](https://docs.docker.com/get-docker/) — **Docker Desktop must be running**
-- An SSH key pair at `~/.ssh/k3s-ollama` — create it once with:
+- [Terraform](https://developer.hashicorp.com/terraform/downloads), [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/index.html), [kubectl](https://kubernetes.io/docs/tasks/tools/), and [Docker](https://docs.docker.com/get-docker/) - **Docker Desktop must be running**
+- An SSH key pair at `~/.ssh/k3s-ollama` - create it once with:
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/k3s-ollama -C "k3s-ollama"
@@ -114,7 +114,7 @@ terraform init
 terraform apply
 ```
 
-Terraform creates the network and servers **and automatically generates `ansible/inventory.ini`** with the real IPs — no manual editing needed.
+Terraform creates the network and servers **and automatically generates `ansible/inventory.ini`** with the real IPs - no manual editing needed.
 
 **2. Configure the cluster with Ansible:**
 
@@ -161,7 +161,7 @@ docker run -d \
 
 Open `http://localhost:3000`, create the first account, select `llama3.2:1b`, and start chatting.
 
-## Teardown — always run when done (avoids ongoing charges)
+## Teardown - always run when done (avoids ongoing charges)
 
 Easiest: `./destroy.sh`. Or manually:
 
@@ -182,10 +182,10 @@ Both should be empty. Tip: set an **AWS Budgets** alert so you are notified of u
 
 ## Troubleshooting
 
-- **Ansible: a worker is `UNREACHABLE`** — the servers are still booting. Wait a minute and re-run `ansible-playbook playbook.yml`.
-- **SSH or kubectl times out reaching the master** — your public IP changed. Update `my_ip` in `terraform.tfvars`, run `terraform apply` again, then retry. (`deploy.sh` handles this automatically.)
-- **Ollama pod stuck in `Evicted` / `DiskPressure`** — the node ran out of disk. The config uses a 30 GB root volume, so re-create the servers with a fresh `terraform apply`.
-- **OpenWebUI shows "No models available"** — its saved Ollama address is stale. Open Settings → Admin Settings → Connections and set the Ollama API URL to `http://<MASTER_IP>`, then refresh. Confirm the backend works with `curl http://<MASTER_IP>/api/tags`. A clean restart also fixes it: `docker rm -f open-webui; docker volume rm open-webui`, then start it again.
+- **Ansible: a worker is `UNREACHABLE`** - the servers are still booting. Wait a minute and re-run `ansible-playbook playbook.yml`.
+- **SSH or kubectl times out reaching the master** - your public IP changed. Update `my_ip` in `terraform.tfvars`, run `terraform apply` again, then retry. (`deploy.sh` handles this automatically.)
+- **Ollama pod stuck in `Evicted` / `DiskPressure`** - the node ran out of disk. The config uses a 30 GB root volume, so re-create the servers with a fresh `terraform apply`.
+- **OpenWebUI shows "No models available"** - its saved Ollama address is stale. Open Settings → Admin Settings → Connections and set the Ollama API URL to `http://<MASTER_IP>`, then refresh. Confirm the backend works with `curl http://<MASTER_IP>/api/tags`. A clean restart also fixes it: `docker rm -f open-webui; docker volume rm open-webui`, then start it again.
 
 ## Key implementation details
 
